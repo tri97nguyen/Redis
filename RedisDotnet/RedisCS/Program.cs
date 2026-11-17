@@ -20,17 +20,28 @@ listener.Stop();
 return;
 static async Task HandleClient(TcpClient client)
 {
-    var clientAddress = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
-    Console.WriteLine($"established connection with client {clientAddress}");
-    
-    await using var stream = client.GetStream();
-
     var buffer = ArrayPool<byte>.Shared.Rent(32);
-    while (await stream.ReadAsync(buffer) is var byteRead and > 0) {
-        var message = Encoding.UTF8.GetString(buffer, 0, byteRead);
-        Console.WriteLine($"{DateTime.Now} Client Sent message at: \"{message}\"");
+    try
+    {
+        client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        var clientAddress = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
+        Console.WriteLine($"established connection with client {clientAddress}");
+    
+        await using var stream = client.GetStream();
+
+        while (await stream.ReadAsync(buffer) is var byteRead and > 0) {
+            var message = Encoding.UTF8.GetString(buffer, 0, byteRead);
+            Console.WriteLine($"{DateTime.Now} Client Sent message at: \"{message}\"");
+        }
+        Console.WriteLine($"client {clientAddress} gracefully disconnected");
     }
-    Console.WriteLine($"client {clientAddress} gracefully disconnected");
-    client.Close();
-    ArrayPool<byte>.Shared.Return(buffer);
+    catch(IOException exception)
+    {
+        Console.WriteLine($"something went wrong with the client. Closing the client. Error: {exception.Message}");
+    }
+    finally
+    {
+        client.Close();
+        ArrayPool<byte>.Shared.Return(buffer);
+    }
 }
